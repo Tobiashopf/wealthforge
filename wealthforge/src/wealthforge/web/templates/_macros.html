@@ -1,0 +1,32 @@
+{% macro allocation(title, slices) %}
+<section class="card alloc">
+  <h3>{{ title }}</h3>
+  {% if slices %}
+  <div class="stack" role="img" aria-label="{{ title }}">
+    {% for s in slices %}<span class="seg c{{ loop.index0 % 6 }}" style="flex: {{ s.share }}" title="{{ s.label }} {{ s.share | pct }}"></span>{% endfor %}
+  </div>
+  <ul class="legend">
+    {% for s in slices %}
+    <li><i class="dot c{{ loop.index0 % 6 }}"></i><span>{{ s.label }}</span><b>{{ s.share | pct }}</b><em>{{ s.value | money(base) }}</em></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing to show yet.</p>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{% macro quantity(asset, value) -%}
+{% if asset.kind.uses_ownership_fraction %}{{ value | ownership }} owned{% else %}{{ value | qty }}{% endif %}
+{%- endmacro %}
+
+{% macro gain_class(value) -%}
+{% if value is none %}{% elif value > 0 %}pos{% elif value < 0 %}neg{% endif %}
+{%- endmacro %}
+
+{% macro delete_button(action, asset_id, label="Delete") %}
+<form method="post" action="{{ action }}" class="inline" data-confirm="Delete this record?">
+  <input type="hidden" name="asset_id" value="{{ asset_id }}">
+  <button class="link danger" type="submit">{{ label }}</button>
+</form>
+{% endmacro %}

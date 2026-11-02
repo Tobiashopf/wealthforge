@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Wealthforge{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  <link rel="icon" href="{{ url_for('static', path='favicon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 16V9m4 7V5m4 11v-6m4 6V7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
+      Wealthforge
+    </a>
+    <nav>
+      <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Overview</a>
+      <a class="button small" href="/assets/new">+ Add asset</a>
+    </nav>
+  </header>
+
+  <main>
+    {% if msg %}<div class="flash ok" role="status">{{ msg }}</div>{% endif %}
+    {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    Wealthforge {{ version }} · your data stays in a local SQLite file on this computer
+  </footer>
+  <script src="{{ url_for('static', path='app.js') }}" defer></script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% from "_macros.html" import quantity, gain_class, delete_button %}
+{% block title %}{{ asset.name }} · Wealthforge{% endblock %}
+{% block content %}
+{% set fraction = asset.kind.uses_ownership_fraction %}
+{% set cur = asset.currency %}
+<p class="crumbs"><a href="/">Overview</a> / {{ asset.asset_class.label }}</p>
+
+<div class="page-head">
+  <div>
+    <h1>{{ asset.name }} {% if asset.ticker %}<span class="tag big">{{ asset.ticker }}</span>{% endif %}</h1>
+    <p class="muted">{{ asset.kind.label }} · {{ cur.value }} · prices: {{ asset.price_source.label }}</p>
+  </div>
+  <div class="head-actions">
+    <a class="button ghost" href="/assets/{{ asset.id }}/edit">Edit</a>
+    <form method="post" action="/assets/{{ asset.id }}/delete" class="inline" data-confirm="Delete {{ asset.name }} and all its history?">
+      <button class="button ghost danger" type="submit">Delete</button>
+    </form>
+  </div>
+</div>
+
+{% if asset.notes %}<p class="notes">{{ asset.notes }}</p>{% endif %}
+
+{% if position is none %}
+<div class="flash err">This asset's transactions are inconsistent (a sale exceeds what was held). Delete the wrong record below.</div>
+{% elif holding %}
+<section class="kpis">
+  <div class="kpi"><span>{{ "Ownership" if fraction else "Quantity" }}</span><b>{{ quantity(asset, position.quantity) }}</b></div>
+  <div class="kpi"><span>{{ "Cost of your share" if fraction else "Average cost" }}</span>
+    <b>{{ (position.cost_basis if fraction else position.average_cost) | money(cur) }}</b></div>
+  <div class="kpi"><span>Market value</span><b>{{ holding.market_value | money(cur) }}</b>
+    {% if weight is not none %}<small class="muted">{{ weight | pct }} of net worth</small>{% endif %}</div>
+  <div class="kpi"><span>Unrealized gain</span>
+    <b class="{{ gain_class(holding.unrealized_gain) }}">{{ holding.unrealized_gain | signed(cur) }}</b>
+    {% if holding.unrealized_pct is not none %}<small class="{{ gain_class(holding.unrealized_gain) }}">{{ holding.unrealized_pct | pct }}</small>{% endif %}</div>
+  <div class="kpi"><span>Income received</span><b>{{ holding.income_total | money(cur) }}</b>
+    <small class="muted">{{ holding.income_12m | money(cur) }} in the last 12 months</small></div>
+  {% if position.realized_gain %}
+  <div class="kpi"><span>Realized gain</span><b class="{{ gain_class(position.realized_gain) }}">{{ position.realized_gain | signed(cur) }}</b></div>
+  {% endif %}
+</section>
+{% endif %}
+
+<div class="grid3 forms">
+  <form method="post" action="/assets/{{ asset.id }}/trades" class="card form">
+    <h3>{{ "Acquisition / sale" if fraction else "Buy / sell" }}</h3>
+    <div class="segmented">
+      <label><input type="radio" name="side" value="buy" checked> {{ "Acquired" if fraction else "Buy" }}</label>
+      <label><input type="radio" name="side" value="sell"> {{ "Sold" if fraction else "Sell" }}</label>
+    </div>
+    <label>Date <input type="date" name="trade_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}" required></label>
+    <label>{{ "Fraction (1 = 100%)" if fraction else "Quantity" }}
+      <input name="quantity" inputmode="decimal" placeholder="{{ '1' if fraction else '100' }}" required></label>
+    <label>{{ "Value of 100%" if fraction else "Unit price" }} ({{ cur.value }})
+      <input name="unit_price" inputmode="decimal" placeholder="{{ '450.000,00' if fraction else '32,15' }}" required></label>
+    <label>{{ "Costs (taxes, notary, broker)" if fraction else "Fees" }} <input name="fees" inputmode="decimal" placeholder="0,00"></label>
+    <button class="button" type="submit">Save</button>
+  </form>
+
+  <form method="post" action="/assets/{{ asset.id }}/prices" class="card form">
+    <h3>{{ "New valuation" if fraction else "Set price manually" }}</h3>
+    {% if asset.price_source.is_automatic %}
+    <p class="hint">Prices come from {{ asset.price_source.label }} when you click "Refresh quotes". A manual price for the same day is overwritten by the next refresh.</p>
+    {% else %}
+    <p class="hint">{{ "What would 100% of it sell for today? Use an appraisal, a broker estimate or recent comparable sales." if fraction else "Use the value from your broker or bank statement." }}</p>
+    {% endif %}
+    <label>Date <input type="date" name="price_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}" required></label>
+    <label>{{ "Value of 100%" if fraction else "Unit price" }} ({{ cur.value }})
+      <input name="unit_price" inputmode="decimal" required></label>
+    <button class="button" type="submit">Save value</button>
+  </form>
+
+  <form method="post" action="/assets/{{ asset.id }}/income" class="card form">
+    <h3>Income received</h3>
+    <label>Type
+      <select name="kind">
+        {% for k in IncomeKind %}<option value="{{ k.value }}"
+          {% if (asset.kind.value == 'real_estate' and k.value == 'rent') or (asset.kind.value == 'business' and k.value == 'distribution') %}selected{% endif %}>{{ k.label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Date <input type="date" name="income_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}" required></label>
+    <label>Amount you received ({{ cur.value }}) <input name="amount" inputmode="decimal" required></label>
+    <label>Note <input name="note" maxlength="200"></label>
+    <button class="button" type="submit">Save income</button>
+  </form>
+</div>
+
+<section class="card">
+  <h2>Transactions</h2>
+  {% if trades %}
+  <table>
+    <thead><tr><th>Date</th><th>Side</th><th class="num">{{ "Fraction" if fraction else "Quantity" }}</th>
+      <th class="num">{{ "Value of 100%" if fraction else "Unit price" }}</th><th class="num">Fees</th><th class="num">Total</th><th></th></tr></thead>
+    <tbody>
+    {% for t in trades %}
+      <tr>
+        <td>{{ t.trade_date.strftime('%d/%m/%Y') }}</td>
+        <td><span class="side {{ t.side.value }}">{{ t.side.value }}</span></td>
+        <td class="num">{{ quantity(asset, t.quantity) }}</td>
+        <td class="num">{{ t.unit_price | money(cur) }}</td>
+        <td class="num">{{ t.fees | money(cur) }}</td>
+        <td class="num">{{ (t.quantity * t.unit_price) | money(cur) }}</td>
+        <td class="num">{{ delete_button('/trades/%d/delete' % t.id, asset.id) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No transactions yet. Record the purchase above to start tracking.</p>{% endif %}
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>{{ "Valuations" if fraction else "Price history" }}</h2>
+    {% if prices %}
+    <table>
+      <thead><tr><th>Date</th><th class="num">{{ "Value of 100%" if fraction else "Price" }}</th><th>Source</th><th></th></tr></thead>
+      <tbody>
+      {% for p in prices[:30] %}
+        <tr><td>{{ p.price_date.strftime('%d/%m/%Y') }}</td><td class="num">{{ p.unit_price | money(cur) }}</td>
+            <td>{{ p.source.value }}</td><td class="num">{{ delete_button('/prices/%d/delete' % p.id, asset.id) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">No prices yet.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Income</h2>
+    {% if income %}
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
+      <tbody>
+      {% for i in income %}
+        <tr><td>{{ i.income_date.strftime('%d/%m/%Y') }}</td><td>{{ i.kind.label }}</td>
+            <td class="num">{{ i.amount | money(cur) }}</td><td>{{ i.note }}</td>
+            <td class="num">{{ delete_button('/income/%d/delete' % i.id, asset.id) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="muted">No income recorded.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

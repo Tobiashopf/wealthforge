@@ -1,0 +1,29 @@
+# Secrets: keep API tokens out of the repository
+.env
+.env.*
+!.env.example
+
+# Your portfolio data never belongs in git
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

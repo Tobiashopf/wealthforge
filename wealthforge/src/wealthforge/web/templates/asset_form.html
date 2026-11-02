@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit " ~ asset.name if asset else "Add asset" }} · Wealthforge{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/">Overview</a>{% if asset %} / <a href="/assets/{{ asset.id }}">{{ asset.name }}</a>{% endif %}</p>
+<h1>{{ "Edit asset" if asset else "Add an asset" }}</h1>
+
+<form method="post" action="{{ '/assets/%d' % asset.id if asset else '/assets' }}" class="card form">
+  <label>Name
+    <input name="name" value="{{ form.name or '' }}" maxlength="80" required autofocus
+           placeholder="e.g. Petrobras PN, Beach house, 30% of my brother's bakery">
+  </label>
+
+  <div class="two">
+    <label>Type
+      <select name="kind" id="kind">
+        <optgroup label="Financial assets">
+        {% for k in AssetKind if k.asset_class == AssetClass.FINANCIAL %}
+          <option value="{{ k.value }}" {% if form.kind == k.value %}selected{% endif %}>{{ k.label }}</option>
+        {% endfor %}
+        </optgroup>
+        <optgroup label="Real assets">
+          <option value="real_estate" {% if form.kind == 'real_estate' %}selected{% endif %}>Real estate</option>
+          <option value="business" {% if form.kind == 'business' %}selected{% endif %}>Business stake</option>
+        </optgroup>
+      </select>
+    </label>
+    <label>Currency
+      <select name="currency">
+        {% for c in Currency %}<option value="{{ c.value }}" {% if form.currency == c.value %}selected{% endif %}>{{ c.value }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <div class="two">
+    <label>Ticker
+      <input name="ticker" value="{{ form.ticker or '' }}" maxlength="20" placeholder="Listed assets only: PETR4, HGLG11, VOO">
+    </label>
+    <label>Price source
+      <select name="price_source">
+        <option value="" {% if not form.price_source %}selected{% endif %}>Choose for me</option>
+        {% for s in PriceSource %}<option value="{{ s.value }}" {% if form.price_source == s.value %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <p class="hint">"Choose for me" uses brapi.dev for B3 tickers in BRL, Finnhub for US tickers in USD,
+     and manual values for everything else.</p>
+
+  <p class="hint fraction-hint">For <b>real estate</b> and <b>business stakes</b>, the quantity you record is the
+     fraction you own (1 = 100%, 0.25 = 25%) and the price is the value of the whole property or company.</p>
+
+  <label>Notes
+    <textarea name="notes" rows="3" maxlength="2000">{{ form.notes or '' }}</textarea>
+  </label>
+
+  <div class="actions">
+    <button class="button" type="submit">{{ "Save changes" if asset else "Create asset" }}</button>
+    <a href="{{ '/assets/%d' % asset.id if asset else '/' }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

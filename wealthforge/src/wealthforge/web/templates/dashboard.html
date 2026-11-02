@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% from "_macros.html" import allocation, quantity, gain_class %}
+{% block content %}
+
+{% if not has_assets %}
+<section class="empty">
+  <h1>Everything you own, in one place</h1>
+  <p>Track stocks, funds and bonds next to your properties and business stakes.
+     Prices of listed assets update automatically; the rest you value yourself.</p>
+  <p><a class="button" href="/assets/new">Add your first asset</a></p>
+  <p class="muted">Want to look around first? Stop the app and run
+     <code>wealthforge demo --db demo.db</code>, then <code>wealthforge serve --db demo.db</code>.</p>
+</section>
+{% else %}
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Net worth · {{ summary.as_of.strftime('%d %b %Y') }}</p>
+    <h1 class="figure">{{ summary.total_value | money(base) }}</h1>
+  </div>
+  <form method="post" action="/refresh" class="refresh" data-busy="Refreshing quotes...">
+    <button class="button" type="submit">Refresh quotes</button>
+  </form>
+</div>
+
+<section class="kpis">
+  <div class="kpi"><span>Invested (cost)</span><b>{{ summary.total_cost | money(base) }}</b></div>
+  <div class="kpi"><span>Unrealized gain</span><b class="{{ gain_class(summary.unrealized_gain) }}">{{ summary.unrealized_gain | signed(base) }}</b></div>
+  <div class="kpi"><span>Realized gain</span><b class="{{ gain_class(summary.realized_gain) }}">{{ summary.realized_gain | signed(base) }}</b></div>
+  <div class="kpi"><span>Income, last 12 months</span><b>{{ summary.income_12m | money(base) }}</b></div>
+</section>
+
+{% if summary.warnings %}
+<section class="warnings">
+  <ul>{% for w in summary.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<div class="grid3">
+  {{ allocation("By asset class", summary.by_class()) }}
+  {{ allocation("By type", summary.by_kind()) }}
+  {{ allocation("By currency", summary.by_currency()) }}
+</div>
+
+<section class="card">
+  <h2>Holdings</h2>
+  <div class="table-wrap">
+  <table class="holdings">
+    <thead>
+      <tr>
+        <th>Asset</th><th>Type</th><th class="num">Quantity</th><th class="num">Avg. cost</th>
+        <th class="num">Price / value</th><th class="num">Market value</th>
+        <th class="num">Gain</th><th class="num">Weight</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for cls in AssetClass %}
+      {% set rows = summary.holdings | selectattr("asset.asset_class", "equalto", cls) | list %}
+      {% if rows %}
+      <tr class="group"><th colspan="8">{{ cls.label }}</th></tr>
+      {% for h in rows %}
+      <tr>
+        <td>
+          <a href="/assets/{{ h.asset.id }}">{{ h.asset.name }}</a>
+          {% if h.asset.ticker %}<span class="tag">{{ h.asset.ticker }}</span>{% endif %}
+        </td>
+        <td>{{ h.asset.kind.label }}</td>
+        <td class="num">{{ quantity(h.asset, h.position.quantity) }}</td>
+        <td class="num">{{ h.position.average_cost | money(h.asset.currency) }}</td>
+        <td class="num">
+          {% if h.price %}
+            {{ h.price.unit_price | money(h.asset.currency) }}
+            <small class="{% if h.is_stale %}stale{% else %}muted{% endif %}">{{ h.price.price_date.strftime('%d/%m/%y') }} · {{ h.price.source.value }}</small>
+          {% else %}<span class="muted">no price</span>{% endif %}
+        </td>
+        <td class="num">
+          {{ h.market_value_base | money(base) }}
+          {% if h.asset.currency != base %}<small class="muted">{{ h.market_value | money(h.asset.currency) }}</small>{% endif %}
+        </td>
+        <td class="num {{ gain_class(h.unrealized_gain) }}">
+          {{ h.unrealized_gain | signed(h.asset.currency) }}
+          {% if h.unrealized_pct is not none %}<small>{{ h.unrealized_pct | pct }}</small>{% endif %}
+        </td>
+        <td class="num">{{ summary.weight(h) | pct }}</td>
+      </tr>
+      {% endfor %}
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+{% if summary.closed %}
+<section class="card">
+  <h2>Closed positions</h2>
+  <table>
+    <thead><tr><th>Asset</th><th class="num">Realized gain</th><th class="num">Income received</th></tr></thead>
+    <tbody>
+    {% for h in summary.closed %}
+      <tr>
+        <td><a href="/assets/{{ h.asset.id }}">{{ h.asset.name }}</a></td>
+        <td class="num {{ gain_class(h.position.realized_gain) }}">{{ h.position.realized_gain | signed(h.asset.currency) }}</td>
+        <td class="num">{{ h.income_total | money(h.asset.currency) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endif %}
+
+<section class="card fx">
+  <h2>USD / BRL</h2>
+  {% if usd_rates %}
+  <p><b class="figure-sm">{{ usd_rates[0].rate }}</b>
+     <span class="muted">on {{ usd_rates[0].rate_date.strftime('%d %b %Y') }} · {{ usd_rates[0].source }}</span></p>
+  {% else %}
+  <p class="muted">No rate yet. "Refresh quotes" fetches the official PTAX rate from the Banco Central do Brasil, or type one below.</p>
+  {% endif %}
+  <form method="post" action="/fx" class="row-form">
+    <input type="hidden" name="currency" value="USD">
+    <label>Date <input type="date" name="rate_date" value="{{ today.isoformat() }}" max="{{ today.isoformat() }}" required></label>
+    <label>BRL per USD <input name="rate" inputmode="decimal" placeholder="5,42" required></label>
+    <button class="button ghost" type="submit">Save rate</button>
+  </form>
+</section>
+{% endblock %}
